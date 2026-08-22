@@ -1,0 +1,27 @@
+<div class="order-card">
+  <div class="oid">#{{ order.id }}</div>
+  <div class="items">
+    {% for it in order.line_items %}{{ it.item_name }} × {{ it.quantity }}{% if not loop.last %}, {% endif %}{% endfor %}
+  </div>
+  <div class="meta">{{ order.student_name }} &middot; {{ order.hostel_block }} &middot; {{ order.time_slot }}</div>
+  <div class="actions">
+    {% if order.status == 'Placed' %}
+    <form method="POST" action="{{ url_for('update_status', order_id=order.id) }}">
+      <input type="hidden" name="status" value="Preparing">
+      <button type="submit" class="primary">Start Preparing</button>
+    </form>
+    {% elif order.status == 'Preparing' %}
+    <form method="POST" action="{{ url_for('update_status', order_id=order.id) }}">
+      <input type="hidden" name="status" value="Ready for Pickup">
+      <button type="submit" class="primary">Mark Ready</button>
+    </form>
+    {% elif order.status == 'Ready for Pickup' %}
+    <form method="POST" action="{{ url_for('update_status', order_id=order.id) }}">
+      <input type="hidden" name="status" value="Completed">
+      <button type="submit" class="primary">Mark Collected</button>
+    </form>
+    {% else %}
+    <span style="font-size:12px; color:var(--green); font-weight:600;">✓ Collected</span>
+    {% endif %}
+  </div>
+</div>

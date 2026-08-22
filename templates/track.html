@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Track Order #{{ order.id }} - CampusEats</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+
+<nav class="navbar">
+  <a href="{{ url_for('student_view') }}" class="brand">CampusEats 🍔</a>
+</nav>
+
+<div class="track-wrap">
+  <div class="track-card">
+    <h2>Order #{{ order.id }}</h2>
+    <div class="eta-banner">
+      <div>
+        <div class="big" id="etaMinutes">{{ order.est_time }} min</div>
+        <div class="small">Estimated time</div>
+      </div>
+      <div style="text-align:right;">
+        <div class="big" id="ordersAhead">{{ order.orders_ahead }}</div>
+        <div class="small">Orders ahead of you</div>
+      </div>
+    </div>
+
+    <div class="progress-track">
+      <div class="progress-fill" id="progressFill" style="width: 5%;"></div>
+      <div class="progress-step" data-status="Placed">
+        <div class="progress-dot">1</div>
+        <div class="label">Placed</div>
+      </div>
+      <div class="progress-step" data-status="Preparing">
+        <div class="progress-dot">2</div>
+        <div class="label">Preparing</div>
+      </div>
+      <div class="progress-step" data-status="Ready for Pickup">
+        <div class="progress-dot">3</div>
+        <div class="label">Ready</div>
+      </div>
+      <div class="progress-step" data-status="Completed">
+        <div class="progress-dot">4</div>
+        <div class="label">Picked Up</div>
+      </div>
+    </div>
+
+    <p style="text-align:center; color:var(--muted); font-size:14px;">
+      Deliver / pickup for <strong>{{ order.student_name }}</strong> &middot; {{ order.hostel_block }} &middot; {{ order.time_slot }}
+    </p>
+
+    <div class="order-items-list">
+      {% for li in line_items %}
+      <div class="order-line">
+        <span>{{ li.item_name }} × {{ li.quantity }}</span>
+        <span>₹{{ "%.0f"|format(li.price * li.quantity) }}</span>
+      </div>
+      {% endfor %}
+      <div class="order-total">
+        <span>Total</span>
+        <span>₹{{ "%.0f"|format(total) }}</span>
+      </div>
+    </div>
+
+    <a class="back-link" href="{{ url_for('student_view') }}">&larr; Order more food</a>
+  </div>
+</div>
+
+<script>
+  const orderId = {{ order.id }};
+  const statuses = ["Placed", "Preparing", "Ready for Pickup", "Completed"];
+
+  function applyStatus(status, estTime, ordersAhead) {
+    const idx = statuses.indexOf(status);
+    document.querySelectorAll('.progress-step').forEach((step, i) => {
+      step.classList.remove('done', 'active');
+      if (i < idx) step.classList.add('done');
+      if (i === idx) step.classList.add('active', 'done');
+    });
+    const pct = Math.max(5, ((idx) / (statuses.length - 1)) * 100);
+    document.getElementById('progressFill').style.width = pct + '%';
+    document.getElementById('etaMinutes').innerText = (status === 'Completed') ? 'Picked up' : estTime + ' min';
+    document.getElementById('ordersAhead').innerText = (status === 'Completed') ? '—' : ordersAhead;
+  }
+
+  applyStatus("{{ order.status }}", {{ order.est_time }}, {{ order.orders_ahead }});
+
+  // Poll every 5s so the student sees live-ish updates without refreshing the page.
+  const poll = setInterval(() => {
+    fetch(`/api/order_status/${orderId}`)
+      .then(res => res.json())
+      .then(data => {
+        if (data.error) return;
+        applyStatus(data.status, data.est_time, data.orders_ahead);
+        if (data.status === 'Completed') clearInterval(poll);
+      })
+      .catch(() => {});
+  }, 5000);
+</script>
+
+</body>
+</html>

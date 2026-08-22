@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kitchen Dashboard 🧑‍🍳 - CampusEats</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+
+<div class="staff-layout">
+  <aside class="staff-sidebar">
+    <div class="brand">CampusEats Kitchen</div>
+    <a href="{{ url_for('staff_view') }}" class="active">Dashboard</a>
+    <a href="{{ url_for('student_view') }}">Switch to Student</a>
+  </aside>
+
+  <main class="staff-main">
+    <h1>Today's Workflow</h1>
+
+    <div class="stat-row">
+      <div class="stat-card">
+        <div class="stat-icon" style="background: var(--ink);">📋</div>
+        <div><div class="stat-num">{{ total }}</div><div class="stat-label">Today's Orders</div></div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon" style="background: var(--amber);">●</div>
+        <div><div class="stat-num">{{ prep }}</div><div class="stat-label">Preparing</div></div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon" style="background: var(--blue);">●</div>
+        <div><div class="stat-num">{{ ready }}</div><div class="stat-label">Ready</div></div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon" style="background: var(--green);">●</div>
+        <div><div class="stat-num">{{ comp }}</div><div class="stat-label">Completed</div></div>
+      </div>
+    </div>
+
+    <div class="board">
+      <div class="board-col">
+        <h4><span class="dot amber"></span> Preparing ({{ prep }})</h4>
+        <div class="board-cards">
+          {% for order in orders if order.status == 'Preparing' %}
+          {% include 'order_card.html' %}
+          {% endfor %}
+        </div>
+      </div>
+
+      <div class="board-col">
+        <h4><span class="dot blue"></span> Ready for Pickup ({{ ready }})</h4>
+        <div class="board-cards">
+          {% for order in orders if order.status == 'Ready for Pickup' %}
+          {% include 'order_card.html' %}
+          {% endfor %}
+        </div>
+      </div>
+
+      <div class="board-col">
+        <h4><span class="dot green"></span> New / Recently Collected</h4>
+        <div class="board-cards">
+          {% for order in orders if order.status in ['Placed', 'Completed'] %}
+          {% include 'order_card.html' %}
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+</body>
+</html>

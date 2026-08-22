@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CampusEats 🍔 - Skip the Queue</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+
+<nav class="navbar">
+  <div class="brand">CampusEats 🍔</div>
+  <div class="profile-chip" onclick="openProfileModal()">
+    <div class="profile-meta">
+      <div class="profile-name">{{ profile.name }}</div>
+      <div class="profile-block">{{ profile.hostel }} &middot; <span class="profile-edit-hint">Edit</span></div>
+    </div>
+    <div class="profile-avatar">{{ profile.name[0] }}</div>
+  </div>
+</nav>
+
+<header class="hero">
+  <h1>Skip the Queue. Grab Your Food.</h1>
+  <p>Your favorite meals from the canteen, pre-ordered from your room.</p>
+</header>
+
+<div class="main-layout">
+  <div>
+    <div class="filter-bar" id="filterBar">
+      <button class="filter-pill active" data-cat="All" onclick="filterCategory('All', this)">All</button>
+      {% for cat in categories %}
+      <button class="filter-pill" data-cat="{{ cat }}" onclick="filterCategory('{{ cat }}', this)">{{ cat }}</button>
+      {% endfor %}
+    </div>
+
+    <div class="menu-scroll">
+      <div class="menu-grid" id="menuGrid">
+        {% for item in items %}
+        <div class="food-card" data-category="{{ item.category }}" data-name="{{ item.name }}">
+          <div class="img-wrap">
+            <img src="{{ item.image_url }}" alt="{{ item.name }}"
+                 onerror="this.src='https://images.unsplash.com/photo-1546069901-ba9599a7e63c?q=80&w=400&auto=format&fit=crop'">
+            <div class="veg-dot {{ '' if item.veg else 'non-veg' }}"><span></span></div>
+            <div class="category-tag">{{ item.category }}</div>
+          </div>
+          <div class="info">
+            <div class="name">{{ item.name }}</div>
+            <div class="price-row">
+              <div class="price">₹{{ "%.0f"|format(item.price) }}</div>
+              <div class="qty-control" id="ctrl-{{ loop.index }}">
+                <button class="add-btn" onclick="addToCart('{{ item.name }}', {{ item.price }}, '{{ item.image_url }}', {{ loop.index }})">Add</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  <aside class="cart-panel">
+    <h3>Your Order</h3>
+
+    <div id="cartEmpty" class="cart-empty">Your cart is empty.<br>Add items from the menu to get started.</div>
+    <div id="cartItems" class="cart-items"></div>
+
+    <div class="cart-total-row" id="cartTotalRow" style="display:none;">
+      <span>Total</span>
+      <span id="cartTotal">₹0</span>
+    </div>
+
+    <label class="field-label">Pickup Time</label>
+    <select class="slot-select" id="timeSlot">
+      {% for slot in time_slots %}
+      <option value="{{ slot }}">{{ slot }}</option>
+      {% endfor %}
+    </select>
+
+    <form id="orderForm" method="POST" action="{{ url_for('place_order') }}">
+      <input type="hidden" name="time_slot" id="timeSlotHidden">
+      <input type="hidden" name="cart_json" id="cartJsonHidden">
+      <button type="button" class="place-order-btn" id="placeOrderBtn" onclick="submitOrder()" disabled>Place Order</button>
+    </form>
+  </aside>
+</div>
+
+<!-- Profile edit modal -->
+<div class="modal-overlay" id="profileModal">
+  <div class="modal-box">
+    <h3>Edit your details</h3>
+    <form method="POST" action="{{ url_for('update_profile') }}">
+      <label class="field-label">Name</label>
+      <input type="text" name="student_name" value="{{ profile.name }}" required>
+      <label class="field-label">Hostel Block</label>
+      <select name="hostel_block">
+        {% for block in hostel_blocks %}
+        <option value="{{ block }}" {{ 'selected' if block == profile.hostel else '' }}>{{ block }}</option>
+        {% endfor %}
+      </select>
+      <div class="modal-actions">
+        <button type="button" class="btn-cancel" onclick="closeProfileModal()">Cancel</button>
+        <button type="submit" class="btn-save">Save</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+  // cart = { itemName: { qty, price, image } }
+  let cart = {};
+
+  function filterCategory(cat, btn) {
+    document.querySelectorAll('.filter-pill').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    document.querySelectorAll('#menuGrid .food-card').forEach(card => {
+      card.style.display = (cat === 'All' || card.dataset.category === cat) ? 'flex' : 'none';
+    });
+  }
+
+  function addToCart(name, price, image, ctrlIndex) {
+    if (!cart[name]) {
+      cart[name] = { qty: 1, price: price, image: image };
+    } else {
+      cart[name].qty += 1;
+    }
+    renderQtyControl(name, price, image, ctrlIndex);
+    renderCart();
+  }
+
+  function changeQty(name, delta, ctrlIndex, price, image) {
+    if (!cart[name]) return;
+    cart[name].qty += delta;
+    if (cart[name].qty <= 0) {
+      delete cart[name];
+      const ctrl = document.getElementById('ctrl-' + ctrlIndex);
+      if (ctrl) {
+        ctrl.innerHTML = `<button class="add-btn" onclick="addToCart('${name}', ${price}, '${image}', ${ctrlIndex})">Add</button>`;
+        ctrl.closest('.food-card').classList.remove('in-cart');
+      }
+    } else {
+      renderQtyControl(name, price, image, ctrlIndex);
+    }
+    renderCart();
+  }
+
+  function renderQtyControl(name, price, image, ctrlIndex) {
+    const ctrl = document.getElementById('ctrl-' + ctrlIndex);
+    if (!ctrl) return;
+    ctrl.classList.add('qty-control');
+    ctrl.innerHTML = `
+      <button onclick="changeQty('${name}', -1, ${ctrlIndex}, ${price}, '${image}')">−</button>
+      <span>${cart[name].qty}</span>
+      <button onclick="changeQty('${name}', 1, ${ctrlIndex}, ${price}, '${image}')">+</button>
+    `;
+    ctrl.closest('.food-card').classList.add('in-cart');
+  }
+
+  function renderCart() {
+    const cartItemsEl = document.getElementById('cartItems');
+    const cartEmptyEl = document.getElementById('cartEmpty');
+    const totalRow = document.getElementById('cartTotalRow');
+    const placeOrderBtn = document.getElementById('placeOrderBtn');
+
+    const names = Object.keys(cart);
+    if (names.length === 0) {
+      cartItemsEl.innerHTML = '';
+      cartEmptyEl.style.display = 'block';
+      totalRow.style.display = 'none';
+      placeOrderBtn.disabled = true;
+      return;
+    }
+
+    cartEmptyEl.style.display = 'none';
+    totalRow.style.display = 'flex';
+    placeOrderBtn.disabled = false;
+
+    let total = 0;
+    cartItemsEl.innerHTML = names.map(name => {
+      const item = cart[name];
+      const lineTotal = item.qty * item.price;
+      total += lineTotal;
+      return `
+        <div class="cart-line">
+          <div>
+            <div class="name">${name}</div>
+            <div class="sub">₹${item.price} × ${item.qty}</div>
+          </div>
+          <div class="line-controls">
+            <span>₹${lineTotal}</span>
+            <button class="remove" onclick="removeLine('${name}')">×</button>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    document.getElementById('cartTotal').innerText = '₹' + total;
+  }
+
+  function removeLine(name) {
+    const removedPrice = cart[name] ? cart[name].price : 0;
+    const removedImage = cart[name] ? cart[name].image : '';
+    delete cart[name];
+    document.querySelectorAll('#menuGrid .food-card').forEach(card => {
+      if (card.dataset.name === name) {
+        const ctrlDiv = card.querySelector('.qty-control');
+        if (ctrlDiv) {
+          const idMatch = ctrlDiv.id.split('-')[1];
+          ctrlDiv.innerHTML = `<button class="add-btn" onclick="addToCart('${name}', ${removedPrice}, '${removedImage}', ${idMatch})">Add</button>`;
+        }
+        card.classList.remove('in-cart');
+      }
+    });
+    renderCart();
+  }
+
+  function submitOrder() {
+    document.getElementById('timeSlotHidden').value = document.getElementById('timeSlot').value;
+    document.getElementById('cartJsonHidden').value = JSON.stringify(cart);
+    document.getElementById('orderForm').submit();
+  }
+
+  function openProfileModal() { document.getElementById('profileModal').classList.add('open'); }
+  function closeProfileModal() { document.getElementById('profileModal').classList.remove('open'); }
+</script>
+
+</body>
+</html>
