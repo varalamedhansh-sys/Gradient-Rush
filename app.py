@@ -8,7 +8,43 @@ app = Flask(__name__)
 app.secret_key = "campuseats-hackathon-secret-key"  # change this in production
 
 DB_NAME = "canteen.db"
+def init_db():
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS settings (
+            key TEXT PRIMARY KEY,
+            value TEXT
+        )
+    ''')
+    cursor.execute('''
+        INSERT OR IGNORE INTO settings (key, value) 
+        VALUES ('kitchen_load', 'Normal')
+    ''')
+    conn.commit()
+    conn.close()
+
+init_db()
 HOSTEL_BLOCKS = ["A Block", "B Block", "C Block", "D Block", "PG Block"]
+
+# All possible pickup slots, ordered from soonest to farthest out.
+ALL_TIME_SLOTS = [
+    "10:00 AM - 10:15 AM",
+    "10:15 AM - 10:30 AM",
+    "12:00 PM - 12:15 PM",
+    "12:15 PM - 12:30 PM",
+    "12:30 PM - 12:45 PM",
+    "01:00 PM - 01:15 PM",
+]
+
+# Kitchen load set by staff: how many of the *soonest* slots get hidden from
+# students. Busier kitchen -> nearest slots disappear -> everyone gets pushed
+# further out so the kitchen isn't promising pickup times it can't hit.
+KITCHEN_LOAD_LEVELS = {
+    "Green": {"label": "Normal", "hide_nearest": 0},
+    "Yellow": {"label": "Busy", "hide_nearest": 2},
+    "Red": {"label": "Very Busy", "hide_nearest": 4},
+}
 
 # Expanded menu with categories so the grid has enough items to scroll,
 # and a filter bar actually has something to filter.
@@ -81,6 +117,17 @@ def init_db():
         )
     ''')
 
+    # Simple shared key/value store -- used for the staff-controlled kitchen
+    # load sensor, so every student sees the same live value (this can't live
+    # in a Flask session since that's per-browser, not shared).
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS settings (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL
+        )
+    ''')
+    cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('kitchen_load', 'Green')")
+
     cursor.execute('SELECT COUNT(*) FROM menu_items')
     if cursor.fetchone()[0] == 0:
         cursor.executemany(
@@ -90,6 +137,21 @@ def init_db():
 
     conn.commit()
     conn.close()
+
+
+def get_kitchen_load():
+    conn = get_db()
+    row = conn.execute("SELECT value FROM settings WHERE key = 'kitchen_load'").fetchone()
+    conn.close()
+    load = row['value'] if row else 'Green'
+    return load if load in KITCHEN_LOAD_LEVELS else 'Green'
+
+
+def get_available_slots(load):
+    hide = KITCHEN_LOAD_LEVELS[load]['hide_nearest']
+    remaining = ALL_TIME_SLOTS[hide:]
+    # Always leave at least the last 2 slots so ordering is never fully blocked.
+    return remaining if remaining else ALL_TIME_SLOTS[-2:]
 
 
 def ensure_profile():
@@ -110,14 +172,8 @@ def student_view():
     ).fetchall()
     conn.close()
 
-    time_slots = [
-        "10:00 AM - 10:15 AM",
-        "10:15 AM - 10:30 AM",
-        "12:00 PM - 12:15 PM",
-        "12:15 PM - 12:30 PM",
-        "12:30 PM - 12:45 PM",
-        "01:00 PM - 01:15 PM",
-    ]
+    kitchen_load = get_kitchen_load()
+    time_slots = get_available_slots(kitchen_load)
     categories = sorted({item['category'] for item in items})
 
     profile = {"name": session['student_name'], "hostel": session['hostel_block']}
@@ -130,6 +186,8 @@ def student_view():
         profile=profile,
         hostel_blocks=HOSTEL_BLOCKS,
         items_json=json.dumps({i['name']: i['price'] for i in items}),
+        kitchen_load=kitchen_load,
+        kitchen_load_label=KITCHEN_LOAD_LEVELS[kitchen_load]['label'],
     )
 
 
@@ -241,6 +299,8 @@ def staff_view():
         prep=prep_count,
         ready=ready_count,
         comp=comp_count,
+        kitchen_load=get_kitchen_load(),
+        load_levels=KITCHEN_LOAD_LEVELS,
     )
 
 
@@ -252,6 +312,28 @@ def update_status(order_id):
     conn.commit()
     conn.close()
     return redirect(url_for('staff_view'))
+
+
+@app.route('/staff/set_load', methods=['POST'])
+def set_kitchen_load():
+    load = request.form.get('load')
+    if load in KITCHEN_LOAD_LEVELS:
+        conn = get_db()
+        conn.execute("UPDATE settings SET value = ? WHERE key = 'kitchen_load'", (load,))
+        conn.commit()
+        conn.close()
+    return redirect(url_for('staff_view'))
+
+
+@app.route('/api/kitchen_load')
+def api_kitchen_load():
+    """Lets the student page poll for load changes without a full reload."""
+    load = get_kitchen_load()
+    return jsonify({
+        "load": load,
+        "label": KITCHEN_LOAD_LEVELS[load]['label'],
+        "slots": get_available_slots(load),
+    })
 
 
 if __name__ == '__main__':

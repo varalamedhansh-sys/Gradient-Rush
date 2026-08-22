@@ -18,6 +18,33 @@
   <main class="staff-main">
     <h1>Today's Workflow</h1>
 
+    <div class="load-panel">
+      <div>
+        <div class="load-title">🚦 Kitchen Load Sensor</div>
+        <div class="load-sub">Sets how far out students can pick a pickup slot — busier kitchen hides the nearest ones.</div>
+      </div>
+      <div class="load-buttons">
+        <form method="POST" action="{{ url_for('set_kitchen_load') }}">
+          <input type="hidden" name="load" value="Green">
+          <button type="submit" class="load-btn {{ 'active-green' if kitchen_load == 'Green' else '' }}">
+            <span class="dot green"></span> Green &middot; Normal
+          </button>
+        </form>
+        <form method="POST" action="{{ url_for('set_kitchen_load') }}">
+          <input type="hidden" name="load" value="Yellow">
+          <button type="submit" class="load-btn {{ 'active-yellow' if kitchen_load == 'Yellow' else '' }}">
+            <span class="dot amber"></span> Yellow &middot; Busy
+          </button>
+        </form>
+        <form method="POST" action="{{ url_for('set_kitchen_load') }}">
+          <input type="hidden" name="load" value="Red">
+          <button type="submit" class="load-btn {{ 'active-red' if kitchen_load == 'Red' else '' }}">
+            <span class="dot" style="background:var(--coral);"></span> Red &middot; Very Busy
+          </button>
+        </form>
+      </div>
+    </div>
+
     <div class="stat-row">
       <div class="stat-card">
         <div class="stat-icon" style="background: var(--ink);">📋</div>

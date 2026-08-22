@@ -26,6 +26,11 @@
 
 <div class="main-layout">
   <div>
+    <div class="kitchen-banner {{ kitchen_load }}" id="kitchenBanner">
+      <span class="dot" style="background: currentColor;"></span>
+      <span id="kitchenBannerText">Kitchen status: {{ kitchen_load_label }} — pickup slots adjusted accordingly.</span>
+    </div>
+
     <div class="filter-bar" id="filterBar">
       <button class="filter-pill active" data-cat="All" onclick="filterCategory('All', this)">All</button>
       {% for cat in categories %}
@@ -75,6 +80,7 @@
       <option value="{{ slot }}">{{ slot }}</option>
       {% endfor %}
     </select>
+    <div style="font-size:11px; color:#9aa0b8; margin:-12px 0 16px;">Available slots update automatically with kitchen load.</div>
 
     <form id="orderForm" method="POST" action="{{ url_for('place_order') }}">
       <input type="hidden" name="time_slot" id="timeSlotHidden">
@@ -221,6 +227,28 @@
 
   function openProfileModal() { document.getElementById('profileModal').classList.add('open'); }
   function closeProfileModal() { document.getElementById('profileModal').classList.remove('open'); }
+
+  // Poll the kitchen load sensor so the banner and available pickup slots
+  // stay in sync with whatever the staff dashboard sets, without a reload.
+  function applyKitchenLoad(data) {
+    const banner = document.getElementById('kitchenBanner');
+    banner.classList.remove('Green', 'Yellow', 'Red');
+    banner.classList.add(data.load);
+    document.getElementById('kitchenBannerText').innerText =
+      `Kitchen status: ${data.label} — pickup slots adjusted accordingly.`;
+
+    const select = document.getElementById('timeSlot');
+    const currentValue = select.value;
+    select.innerHTML = data.slots.map(s => `<option value="${s}">${s}</option>`).join('');
+    if (data.slots.includes(currentValue)) select.value = currentValue;
+  }
+
+  setInterval(() => {
+    fetch('/api/kitchen_load')
+      .then(res => res.json())
+      .then(applyKitchenLoad)
+      .catch(() => {});
+  }, 6000);
 </script>
 
 </body>
