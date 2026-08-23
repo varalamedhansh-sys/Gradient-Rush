@@ -81,7 +81,7 @@ pip install flask
 python app.py
 ```
 
-The app will be available at **http://127.0.0.1:5000**
+The app will be available at **https://gradient-rush.onrender.com/**
 
 - Student ordering page: `https://gradient-rush.onrender.com/`
 - Kitchen staff dashboard: `https://gradient-rush.onrender.com/staff`
